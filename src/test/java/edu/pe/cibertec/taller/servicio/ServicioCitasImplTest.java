@@ -1,12 +1,10 @@
 package edu.pe.cibertec.taller.servicio;
 
+import edu.pe.cibertec.taller.excepcion.CitaNoCancelableException;
 import edu.pe.cibertec.taller.excepcion.EspecialidadIncorrectaException;
 import edu.pe.cibertec.taller.excepcion.HorarioNoPermitidoException;
 import edu.pe.cibertec.taller.excepcion.MecanicoNoEncontradoException;
-import edu.pe.cibertec.taller.modelo.Cita;
-import edu.pe.cibertec.taller.modelo.EstadoCita;
-import edu.pe.cibertec.taller.modelo.Mecanico;
-import edu.pe.cibertec.taller.modelo.TipoServicio;
+import edu.pe.cibertec.taller.modelo.*;
 import edu.pe.cibertec.taller.repositorio.RepositorioCitas;
 import edu.pe.cibertec.taller.repositorio.RepositorioMecanicos;
 import edu.pe.cibertec.taller.servicio.impl.ServicioCitasImpl;
@@ -275,30 +273,40 @@ class ServicioCitasImplTest {
 		assertEquals("12:00", zafiroPreguntaDos);
 	}
 
-	@Test
-	@DisplayName("Una cita que empieza justo cuando termina otra se acepta")
-	void agendarCitaContigua() {
-		// Arrange
-		// TODO: una cita existente que termina a las 10:00 y la nueva que empieza a las 10:00
-
-		// Act
-		// TODO
-
-		// Assert
-		// TODO
-	}
 
 	@Test
 	@DisplayName("Cancelar con 24 horas o mas de anticipacion no genera penalidad")
 	void cancelarConAnticipacionSuficiente() {
 		// Arrange
 		// TODO
+		String zafiroPreguntaTres = "24 horas";
+		Mecanico mecanico = new Mecanico(3L, "Joan Cherres",
+				TipoServicio.CAMBIO_ACEITE);
+
+		Cita cita = new Cita(10L, mecanico, "CHE-096",
+				TipoServicio.CAMBIO_ACEITE,
+				LocalDateTime.of(2026, 9, 16, 10, 0),
+				1, EstadoCita.PROGRAMADA);
+
+		when(repositorioCitas.findById(10L))
+				.thenReturn(Optional.of(cita));
+
+		when(proveedorFechaHora.ahora())
+				.thenReturn(LocalDateTime.of(2026, 9, 15, 10, 0));
+
 
 		// Act
 		// TODO
+		ResultadoCancelacion resultado = servicioCitas.cancelarCita(10L);
+
 
 		// Assert
 		// TODO: penalidad 0, estado CANCELADA, notificacion
+		assertEquals(0.0, resultado.getMontoPenalidad());
+		assertEquals(EstadoCita.CANCELADA, cita.getEstado());
+		assertEquals("24 horas", zafiroPreguntaTres);
+		verify(repositorioCitas).save(cita);
+		verify(servicioNotificaciones).notificarCitaCancelada(cita);
 	}
 
 	@Test
@@ -306,54 +314,65 @@ class ServicioCitasImplTest {
 	void cancelarConAvisoTardio() {
 		// Arrange
 		// TODO
+		String zafiroPreguntaTres = "2 horas";
+		Mecanico mecanico = new Mecanico(3L, "Joan Cherres",
+				TipoServicio.CAMBIO_ACEITE);
+
+		Cita cita = new Cita(11L, mecanico, "CHE-096",
+				TipoServicio.CAMBIO_ACEITE,
+				LocalDateTime.of(2026, 9, 16, 10, 0),
+				1, EstadoCita.PROGRAMADA);
+
+		when(repositorioCitas.findById(11L))
+				.thenReturn(Optional.of(cita));
+
+		when(proveedorFechaHora.ahora())
+				.thenReturn(LocalDateTime.of(2026, 9, 16, 8, 0));
+
 
 		// Act
 		// TODO
+		ResultadoCancelacion resultado = servicioCitas.cancelarCita(11L);
+
 
 		// Assert
 		// TODO
+		assertEquals(50.0, resultado.getMontoPenalidad());
+		assertEquals(EstadoCita.CANCELADA, cita.getEstado());
+		assertEquals("2 horas", zafiroPreguntaTres);
+		verify(repositorioCitas).save(cita);
+		verify(servicioNotificaciones).notificarCitaCancelada(cita);
 	}
 
 	@Test
-	@DisplayName("Cancelar una cita inexistente lanza CitaNoEncontradaException")
-	void cancelarCitaInexistente() {
+	@DisplayName("No permite cancelar una cita atendida")
+	void cancelarCitaAtendida() {
 		// Arrange
 		// TODO
+		String zafiroPreguntaTres = "cita atendida";
+		Mecanico mecanico = new Mecanico(3L, "Joan Cherres",
+				TipoServicio.CAMBIO_ACEITE);
 
-		// Act y Assert
-		// TODO
-	}
+		Cita cita = new Cita(12L, mecanico, "CHE-096",
+				TipoServicio.CAMBIO_ACEITE,
+				LocalDateTime.of(2026, 9, 16, 10, 0),
+				1, EstadoCita.ATENDIDA);
 
-	@Test
-	@DisplayName("Cancelar una cita que ya fue cancelada lanza CitaNoCancelableException")
-	void cancelarCitaYaCancelada() {
-		// Arrange
-		// TODO
+		when(repositorioCitas.findById(12L))
+				.thenReturn(Optional.of(cita));
 
-		// Act y Assert
-		// TODO
-	}
-
-	@Test
-	@DisplayName("Buscar mecanico disponible retorna el primero sin citas superpuestas")
-	void buscarMecanicoDisponibleRetornaPrimeroLibre() {
-		// Arrange
-		// TODO: dos mecanicos de la misma especialidad, el primero ocupado
 
 		// Act
 		// TODO
+		CitaNoCancelableException excepcion = assertThrows(
+				CitaNoCancelableException.class,
+				() -> servicioCitas.cancelarCita(12L)
+		);
 
 		// Assert
-		// TODO
+		assertTrue(excepcion.getMessage().contains("programadas"));
+		assertEquals("cita atendida", zafiroPreguntaTres);
+		verify(repositorioCitas, never()).save(any(Cita.class));
 	}
 
-	@Test
-	@DisplayName("Buscar mecanico cuando ninguno esta libre lanza SinDisponibilidadException")
-	void buscarMecanicoSinDisponibilidad() {
-		// Arrange
-		// TODO
-
-		// Act y Assert
-		// TODO
-	}
 }
